@@ -1,0 +1,48 @@
+name: test
+
+# The action installs the version asked for, on every OS and CPU a release covers, and `stubs --version` prints it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 7 * * 1" # Mondays: a new release, or a change on GitHub's runners, shows up here
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-2025]
+        version: [latest, pinned]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Choose the version
+        id: want
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh release view --repo stubsdev/cli-releases --json tagName --jq .tagName)
+          if [[ "${{ matrix.version }}" == pinned ]]; then
+            # The first release, so a pinned version that isn't the latest is tested once there are two.
+            pinned=$(gh release list --repo stubsdev/cli-releases --limit 100 --json tagName --jq '.[-1].tagName')
+            echo "input=${pinned#v}" >> "$GITHUB_OUTPUT"; echo "expect=${pinned#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "input=latest" >> "$GITHUB_OUTPUT"; echo "expect=${latest#v}" >> "$GITHUB_OUTPUT"
+          fi
+      - id: setup
+        uses: ./
+        with:
+          version: ${{ steps.want.outputs.input }}
+      - name: stubs --version matches
+        shell: bash
+        run: |
+          printed=$(stubs --version)
+          [[ "$printed" == "${{ steps.want.outputs.expect }}" ]] || { echo "::error::stubs --version printed $printed"; exit 1; }
+          [[ "${{ steps.setup.outputs.version }}" == "$printed" ]] || { echo "::error::the action's output says ${{ steps.setup.outputs.version }}"; exit 1; }

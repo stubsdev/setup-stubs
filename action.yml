@@ -1,0 +1,31 @@
+name: Set up stubs
+description: Installs the stubs CLI for the Stubs Protobuf registry, checking the download against the release's SHA256SUMS.
+author: Stubs
+branding:
+  icon: package
+  color: orange
+
+inputs:
+  version:
+    description: The stubs version to install, such as 0.1.0, or "latest".
+    required: false
+    default: latest
+  github-token:
+    description: A token for GitHub's API, used to find the latest release without hitting the anonymous rate limit.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  version:
+    description: The version installed.
+    value: ${{ steps.install.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: bash "$GITHUB_ACTION_PATH/install.sh"
